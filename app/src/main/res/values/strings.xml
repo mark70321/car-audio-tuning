@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">調音技術驗證</string>
+
+    <!-- 裝置資訊 -->
+    <string name="section_device">裝置資訊</string>
+    <string name="device_model">型號</string>
+    <string name="device_manufacturer">製造商</string>
+    <string name="device_brand">品牌</string>
+    <string name="device_android_version">Android 版本</string>
+    <string name="device_api_level">API level</string>
+    <string name="device_unprocessed">支援 UNPROCESSED 錄音</string>
+    <string name="yes">是</string>
+    <string name="no">否</string>
+
+    <!-- EQ 測試 -->
+    <string name="section_eq">系統級 EQ 測試</string>
+    <string name="eq_hint">先打開其他 App 播音樂，再回來按按鈕，用耳朵聽低音有沒有消失。按完可以切回音樂 App，效果應該會持續。</string>
+    <string name="engine_dynamics">DynamicsProcessing</string>
+    <string name="engine_equalizer">Equalizer（舊 API）</string>
+    <string name="engine_status_ok">建立成功</string>
+    <string name="engine_status_fail">建立失敗：%1$s</string>
+    <string name="engine_status_unsupported">此 Android 版本不支援（需要 Android 9 / API 28 以上）</string>
+    <string name="engine_status_not_tried">尚未嘗試</string>
+    <string name="engine_status_skipped">DynamicsProcessing 已成功，未自動嘗試（可按下方按鈕手動建立做對照）</string>
+    <string name="engine_has_control">取得控制權：%1$s</string>
+    <string name="engine_detail_dp">頻段：%1$s</string>
+    <string name="engine_detail_eq">頻段數 %1$d，可調範圍 %2$d～%3$d dB，中心頻率：%4$s</string>
+    <string name="engine_create_eq">手動建立 Equalizer 做對照</string>
+    <string name="engine_retry">重新建立全部</string>
+    <string name="choose_engine">要用哪個 API 測試：</string>
+    <string name="btn_cut_bass">砍掉低音</string>
+    <string name="btn_restore">恢復原狀</string>
+    <string name="state_restored">目前狀態：原狀（EQ 關閉）</string>
+    <string name="state_cut">目前狀態：已砍低音（%1$s，250Hz 以下 %2$s）</string>
+    <string name="apply_error">套用失敗：%1$s</string>
+    <string name="engine_not_ready">這個 API 沒有建立成功，不能用</string>
+
+    <!-- 測試清單 -->
+    <string name="section_checklist">測試清單</string>
+    <string name="checklist_hint">每一項都分別用兩個 API 各測一次。按「砍掉低音」後去播放，聽完回來勾結果。</string>
+    <string name="check_item_local">車機本機音樂 App 播放時</string>
+    <string name="check_item_carplay">車機上的 CarPlay 播放時</string>
+    <string name="check_item_bt">車機藍牙音樂播放時</string>
+    <string name="check_item_phone">手機上（藍牙／Android Auto 輸出）</string>
+    <string name="result_untested">未測</string>
+    <string name="result_works">有作用</string>
+    <string name="result_no_effect">沒作用</string>
+    <string name="btn_share">分享測試結果（傳給自己或 Claude）</string>
+    <string name="btn_clear">清除勾選</string>
+    <string name="share_title">分享測試結果</string>
+    <string name="share_unprocessed_line">UNPROCESSED：%1$s</string>
+</resources>

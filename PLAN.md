@@ -137,6 +137,55 @@ app/
 - `Measurement`：原始量測資料**完整保存**
 - `Report`：分數、問題清單，可匯出 PDF
 - `Preset`：情境設定
+- `LicenseRecord`：本機授權紀錄（欄位見下方「授權架構」）
+
+### 授權架構（階段 0～1 只預留，階段 2 才實作）
+
+**原則**：只用 Google Play 當唯一的購買來源，**不架自己的伺服器、不自己發金鑰**。車機離線授權靠「把 Google 已簽章的購買紀錄轉交給車機驗證」達成。
+
+**為什麼不自己簽授權**：私鑰若放在 App 裡，任何人拆 APK 都拿得到，等於沒有保護；放在伺服器又違反「不需後端」。Google Play 本身就會用開發者專屬的 RSA 金鑰對每筆購買簽章，直接沿用這個簽章最省事也最可靠。
+
+#### 流程
+1. **手機購買**：Play Billing 一次性商品 `full_unlock`。購買後必須在 3 天內 acknowledge（確認），否則 Google 會自動退款，這一步在 App 端就能做，不需要伺服器。
+2. **手機產生 License Payload**：把 Play 回傳的原始購買資料（`Purchase.originalJson`）和 Google 簽章（`Purchase.signature`）原封不動包進去，再加上下方的中繼欄位。
+3. **配對時傳給車機**：走既有 QR 配對通道（區域網路／藍牙），不另開傳輸方式。
+4. **車機離線驗證**：用內嵌在 App 裡的 Play Console 公開金鑰（Base64 RSA 公鑰，公開金鑰不怕被看到）驗證簽章、檢查 `productId`、`packageName`、`purchaseState`。通過就寫入 `LicenseRecord`。
+5. **每次配對都重送一次**：主力情境中手機是麥克風，調音時一定會連線，所以每次配對順便更新授權；手機回報已退款時，車機收回付費功能。車機長時間沒配對時**維持已解鎖**，不因離線而鎖住使用者。
+6. **車機本身有 Play 商店時**：直接在車機上查詢購買紀錄或在車機上購買，結果寫入同一個 `LicenseRecord`。
+
+#### License Payload（配對時傳送的封包，JSON）
+| 欄位 | 說明 |
+|---|---|
+| `schemaVersion` | 封包格式版本，從 1 開始；格式改變時遞增，舊版 App 遇到看不懂的版本就忽略 |
+| `purchaseJson` | Google 原始購買資料字串（不得重新排版，否則簽章失效） |
+| `signature` | Google 對 `purchaseJson` 的簽章 |
+| `issuedAt` | 手機產生封包的時間（UTC 毫秒） |
+| `sourceDeviceId` | 手機端的 App 安裝識別碼（App 自己產生的隨機 UUID，不使用硬體序號等個資） |
+| `targetDeviceId` | 車機端的 App 安裝識別碼（從配對 QR code 取得） |
+
+#### LicenseRecord（存在每台設備的 DataStore）
+| 欄位 | 說明 |
+|---|---|
+| `status` | `NONE`／`ACTIVE`／`REVOKED` |
+| `source` | `PLAY_LOCAL`（本機 Play 查到）／`PAIRED_TRANSFER`（由手機轉交）／`SERVER`（保留給未來） |
+| `productId` | 目前只有 `full_unlock`，保留多商品的彈性 |
+| `purchaseTokenHash` | 購買憑證的 SHA-256 雜湊，用來比對是不是同一筆購買，不存原始憑證 |
+| `orderId` | Google 訂單編號，客服退款查詢用 |
+| `verifiedAt` | 最後一次驗證成功的時間 |
+| `payloadSchemaVersion` | 寫入時使用的封包版本 |
+
+#### 程式結構預留
+- `billing/` 模組對外只提供一個介面：`EntitlementRepository.isUnlocked(feature)`。UI 和其他模組**只問這個介面**，不直接碰 Play Billing 或封包。
+- 驗證來源寫成可替換的實作：`PlayBillingSource`、`PairedTransferSource`，未來要加伺服器驗證只要多一個 `ServerSource`，其他程式不用改。
+- 付費功能清單集中在一個 enum（例如 `Feature.AUTO_LOOP`、`Feature.AB_COMPARE`、`Feature.PRESETS`），不要在各處寫死判斷。
+- 開發／封閉測試期間用 Play「授權測試」帳號測購買流程，不在程式裡加後門開關。
+
+#### 刻意不做（保持輕量）
+- 不限制一筆購買能授權幾台車機：沒有伺服器就無法可靠計數，強行做只會誤傷正常使用者。
+- 不做混淆加固、Root 偵測等防破解措施：百元級商品不值得，被破解的損失小於誤判付費用戶的傷害。
+- 不做到期與續約：一次性買斷，沒有到期概念。
+
+> 安全取捨：在 App 端驗證 Google 簽章，擋得住一般使用者，擋不住有心修改 APK 的人。這是「不架後端」的必然代價，對百元級買斷商品可以接受。若日後盜版明顯影響收入，再加 `ServerSource` 呼叫 Google Play Developer API 做伺服器端驗證。
 
 ---
 
@@ -181,6 +230,8 @@ app/
 | 範圍膨脹 | 嚴格依第 9 節順序，未完成前一階段不做下一階段 |
 | 付費意願較低 | 免費健檢先展現價值，定價保守 |
 | 量測音量傷聽力 | 音量上限與警示，禁止行車中量測 |
+| 車機沒有 Play 商店、無法直接購買 | 手機購買後，配對時轉交 Google 簽章的購買紀錄給車機離線驗證（見第 5 節「授權架構」） |
+| 無後端導致授權可被修改 APK 繞過 | 接受此風險；預留 `ServerSource`，盜版明顯時再補伺服器驗證 |
 
 ---
 
@@ -204,7 +255,7 @@ app/
 
 ### 階段 2
 - 全自動閉環（若階段 0 通過）
-- 付費解鎖、A/B 比較、情境設定
+- 付費解鎖（實作第 5 節「授權架構」）、A/B 比較、情境設定
 
 ### 階段 3
 - 只有手機模式、Android Auto 情境

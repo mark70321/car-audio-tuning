@@ -123,6 +123,16 @@ class MeasureSession(private val context: Context) {
                 ?: throw IllegalStateException("this phone cannot record from ${source.name}")
             sampleRate = fs
             val sweep = LogSweep(fs, durationSec = 6.0).also { this.sweep = it }
+            // 暖機兼音量檢查：先播一段 2 秒短掃頻，結果不算（麥克風剛啟動時噪音偏高）
+            step = 0
+            val warmSweep = LogSweep(fs, durationSec = 2.0)
+            val warm = SweepCapture.run(source, warmSweep)
+            val lv = withContext(Dispatchers.Default) {
+                MeasurementAnalyzer.analyze(warm.samples, warmSweep, warm.prerollSamples).levels
+            }
+            if (lv.clipped) throw IllegalStateException(context.getString(R.string.cal_too_loud, lv.peakDbfs))
+            if (lv.tooQuiet) throw IllegalStateException(context.getString(R.string.cal_too_quiet, lv.peakDbfs))
+            delay(1000)
             for (i in 1..RUNS) {
                 step = i
                 val capture = SweepCapture.run(source, sweep)
@@ -261,7 +271,13 @@ private fun MeasureCard(session: MeasureSession, source: MicSource, onSource: (M
             modifier = Modifier.fillMaxWidth().height(110.dp),
         ) { Text(stringResource(R.string.btn_start, RUNS), fontSize = 34.sp, fontWeight = FontWeight.Bold) }
 
-        if (session.running) Body(stringResource(R.string.running, session.step, RUNS), bold = true)
+        if (session.running) {
+            Body(
+                if (session.step == 0) stringResource(R.string.calibrating)
+                else stringResource(R.string.running, session.step, RUNS),
+                bold = true,
+            )
+        }
         if (denied) Body(stringResource(R.string.permission_denied), color = MaterialTheme.colorScheme.error)
         session.error?.let { Body(stringResource(R.string.measure_error, it), color = MaterialTheme.colorScheme.error) }
         session.savedDir?.let { Text(stringResource(R.string.saved_to, it), fontSize = 16.sp) }
@@ -296,7 +312,9 @@ private fun ResultCard(session: MeasureSession, source: MicSource) {
             if (l.noisy) Body(stringResource(R.string.warn_noisy))
         }
         repeatabilityOf(list)?.let { rep ->
-            Body(stringResource(R.string.spread_line, rep.midSpreadDb, rep.fullSpreadDb), bold = true)
+            Body(stringResource(R.string.spread_line, rep.midSpreadDb), bold = true)
+            Body(stringResource(R.string.offset_line, rep.levelOffsetDb))
+            rep.validRangeHz?.let { (lo, hi) -> Body(stringResource(R.string.valid_range_line, lo, hi)) }
             Body(verdictText(rep.verdict), bold = true)
         }
     }
@@ -396,7 +414,12 @@ private fun buildShareText(context: Context, session: MeasureSession, only: MicS
                 r.latencyMs, l.peakDbfs, l.noiseDbfs, l.snrDb,
             )
         }
-        repeatabilityOf(list)?.let { lines += "差異：100Hz～10kHz 最大 %.1f dB，40Hz～16kHz %.1f dB".format(it.midSpreadDb, it.fullSpreadDb) }
+        repeatabilityOf(list)?.let { rep ->
+            val range = rep.validRangeHz?.let { "%.0f～%.0f Hz".format(it.first, it.second) } ?: "-"
+            lines += "形狀差異（100Hz～10kHz，有效頻段內）最大 %.1f dB，整體音量偏移 %.1f dB，有效頻段 %s".format(
+                rep.midSpreadDb, rep.levelOffsetDb, range,
+            )
+        }
         lines += "Hz\t" + list.indices.joinToString("\t") { "第${it + 1}次(dB)" }
         for (f in centers) {
             val values = list.joinToString("\t") { r ->

@@ -8,8 +8,9 @@ import kotlin.math.sqrt
 data class Levels(val peakDbfs: Double, val noiseDbfs: Double, val signalDbfs: Double) {
     /** 訊噪比：掃頻音量比背景噪音大多少 dB。 */
     val snrDb: Double get() = signalDbfs - noiseDbfs
-    val clipped: Boolean get() = peakDbfs > -0.5
-    val tooQuiet: Boolean get() = signalDbfs < -50
+    val clipped: Boolean get() = peakDbfs > -1.0
+    /** 2026-10 桌邊實測：峰值 -14～-22 dBFS 時高頻差異 3～6 dB；-5 dBFS 時僅 0.3 dB */
+    val tooQuiet: Boolean get() = peakDbfs < -15
     val noisy: Boolean get() = snrDb < 25
 }
 
@@ -51,16 +52,46 @@ object MeasurementAnalyzer {
     private fun toDb(v: Double) = 20 * log10(v + 1e-12)
 }
 
-/** 重複性：同位置連測幾次，每個頻率點最大值減最小值。 */
-class Repeatability(curves: List<FrequencyResponse>) {
+/**
+ * 重複性：同位置連測幾次，比較曲線「形狀」差多少。
+ * - 整體音量偏移（例如中途調了音量）另外算在 [levelOffsetDb]，不算進形狀差異——調音只在乎形狀。
+ * - 喇叭發不出聲音的頻段（低於曲線最高點 [validBelowPeakDb] dB，錄到的其實是背景噪音）不列入。
+ */
+class Repeatability(curves: List<FrequencyResponse>, validBelowPeakDb: Double = 35.0) {
+    init {
+        require(curves.size >= 2 && curves.all { it.freqs.contentEquals(curves.first().freqs) })
+    }
+
     val freqs: DoubleArray = curves.first().freqs
+
+    /** 每條曲線在 200Hz～2kHz 的平均音量，當作整體音量基準 */
+    private val levels: List<Double> = curves.map { c ->
+        val idx = freqs.indices.filter { freqs[it] in 200.0..2000.0 }
+        if (idx.isEmpty()) 0.0 else idx.map { c.db[it] }.average()
+    }
+
+    /** 幾次之間整體音量最大差多少 dB */
+    val levelOffsetDb: Double = levels.max() - levels.min()
+
+    /** 每個頻率點的形狀差異（已扣掉整體音量偏移） */
     val spreadDb: DoubleArray = DoubleArray(freqs.size) { i ->
-        val values = curves.map { it.db[i] }
+        val values = curves.mapIndexed { k, c -> c.db[i] - levels[k] }
         values.max() - values.min()
     }
 
+    /** 喇叭有發出聲音的頻點：平均曲線不低於最高點 [validBelowPeakDb] dB */
+    val valid: BooleanArray = run {
+        val mean = DoubleArray(freqs.size) { i -> curves.map { it.db[i] }.average() }
+        val top = mean.max()
+        BooleanArray(freqs.size) { mean[it] >= top - validBelowPeakDb }
+    }
+
+    /** 有效頻段的最低～最高頻率（Hz） */
+    val validRangeHz: Pair<Double, Double>? = freqs.indices.filter { valid[it] }
+        .takeIf { it.isNotEmpty() }?.let { freqs[it.first()] to freqs[it.last()] }
+
     fun maxSpread(fromHz: Double, toHz: Double): Double =
-        freqs.indices.filter { freqs[it] in fromHz..toHz }.maxOfOrNull { spreadDb[it] } ?: 0.0
+        freqs.indices.filter { valid[it] && freqs[it] in fromHz..toHz }.maxOfOrNull { spreadDb[it] } ?: 0.0
 
     /** 主要聽感範圍 100Hz～10kHz 的最大差異。 */
     val midSpreadDb: Double get() = maxSpread(100.0, 10_000.0)
@@ -76,8 +107,4 @@ class Repeatability(curves: List<FrequencyResponse>) {
         }
 
     enum class Verdict { GOOD, OK, POOR }
-
-    init {
-        require(curves.size >= 2 && curves.all { it.freqs.contentEquals(curves.first().freqs) })
-    }
 }

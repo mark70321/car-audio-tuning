@@ -4,7 +4,7 @@
 
     <!-- 說明 -->
     <string name="section_howto">怎麼測</string>
-    <string name="howto_steps">1. 手機用藍牙連上車機，車機切到藍牙音樂\n2. 熄火或怠速、關窗、關冷氣\n3. 手機放駕駛座頭枕旁、耳朵高度，麥克風（手機底部）朝前，測量時不要動它\n4. 車機音量調到平常聽音樂偏大聲的程度\n5. 按「開始連測 3 次」，會聽到 3 次「嗚——」由低到高的聲音，每次約 9 秒，期間保持安靜</string>
+    <string name="howto_steps">1. 手機用藍牙連上車機，車機切到藍牙音樂\n2. 熄火或怠速、關窗、關冷氣\n3. 手機放駕駛座頭枕旁、耳朵高度，麥克風（手機底部）朝前，測量時不要動它\n4. 車機音量調到平常聽音樂偏大聲的程度\n5. 按「開始連測 3 次」，會先播一次短的聲音檢查音量（太小聲會請你調大），接著聽到 3 次「嗚——」由低到高的聲音，每次約 9 秒，期間保持安靜</string>
     <string name="howto_volume_warning">⚠️ 第一次先用小音量試一次，聲音太大會傷耳朵。</string>
 
     <!-- 量測 -->
@@ -15,6 +15,9 @@
     <string name="source_mic">MIC（一般）</string>
     <string name="source_unsupported">這支手機不支援 UNPROCESSED，按了會失敗</string>
     <string name="btn_start">開始連測 %1$d 次</string>
+    <string name="calibrating">暖機＋音量檢查中（約 5 秒，這次不算）…</string>
+    <string name="cal_too_quiet">太小聲（峰值 %1$.0f dBFS），請把音量調大再按一次</string>
+    <string name="cal_too_loud">太大聲會爆音（峰值 %1$.0f dBFS），請把音量調小再按一次</string>
     <string name="running">第 %1$d / %2$d 次量測中，請保持安靜…</string>
     <string name="permission_denied">沒有麥克風權限，無法量測。請到系統設定允許麥克風。</string>
     <string name="measure_error">量測失敗：%1$s</string>
@@ -28,7 +31,9 @@
     <string name="warn_clipped">　⚠️ 太大聲（爆音），把音量調小再測</string>
     <string name="warn_quiet">　⚠️ 太小聲，把音量調大再測</string>
     <string name="warn_noisy">　⚠️ 背景太吵，結果可能不準</string>
-    <string name="spread_line">三次差異（100Hz～10kHz）最大 %1$.1f dB；40Hz～16kHz 最大 %2$.1f dB</string>
+    <string name="spread_line">三次曲線形狀差異（100Hz～10kHz）最大 %1$.1f dB</string>
+    <string name="offset_line">整體音量偏移 %1$.1f dB（中途調過音量會變大，不影響形狀判斷）</string>
+    <string name="valid_range_line">喇叭有發出聲音的範圍：%1$.0f～%2$.0f Hz（範圍外不列入比較）</string>
     <string name="verdict_good">很穩定 ✅</string>
     <string name="verdict_ok">可接受</string>
     <string name="verdict_poor">不穩定 ❌（檢查手機有沒有移動、周圍有沒有噪音）</string>

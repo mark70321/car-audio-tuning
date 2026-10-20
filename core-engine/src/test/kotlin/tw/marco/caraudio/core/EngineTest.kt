@@ -150,10 +150,31 @@ class EngineTest {
     fun repeatabilitySpread() {
         val grid = FrequencyResponse.logGrid()
         val a = FrequencyResponse(grid, DoubleArray(grid.size) { 0.0 })
-        val b = FrequencyResponse(grid, DoubleArray(grid.size) { if (grid[it] in 900.0..1100.0) 2.0 else 0.5 })
-        val rep = Repeatability(listOf(a, a, b))
-        assertEquals(2.0, rep.midSpreadDb, 1e-9)
+        val bump = FrequencyResponse(grid, DoubleArray(grid.size) { if (grid[it] in 900.0..1100.0) 2.0 else 0.0 })
+        val rep = Repeatability(listOf(a, a, bump))
+        assertEquals(2.0, rep.midSpreadDb, 0.2)
         assertEquals(Repeatability.Verdict.OK, rep.verdict)
         assertEquals(Repeatability.Verdict.GOOD, Repeatability(listOf(a, a, a)).verdict)
+    }
+
+    @Test
+    fun levelOffsetIsSeparatedFromShape() {
+        val grid = FrequencyResponse.logGrid()
+        val a = FrequencyResponse(grid, DoubleArray(grid.size) { kotlin.math.sin(it * 0.3) })
+        val louder = FrequencyResponse(grid, DoubleArray(grid.size) { a.db[it] + 7.0 })
+        val rep = Repeatability(listOf(a, louder, a))
+        assertEquals(7.0, rep.levelOffsetDb, 1e-9)
+        assertEquals(0.0, rep.midSpreadDb, 1e-9)
+    }
+
+    @Test
+    fun bandsBelowNoiseAreIgnored() {
+        // 喇叭發不出 150Hz 以下：那段只剩隨機噪音
+        val grid = FrequencyResponse.logGrid()
+        val rnd = Random(1)
+        fun curve() = FrequencyResponse(grid, DoubleArray(grid.size) { if (grid[it] < 150) -70 + 10 * rnd.nextDouble() else 0.0 })
+        val rep = Repeatability(listOf(curve(), curve(), curve()))
+        assertEquals(0.0, rep.midSpreadDb, 1e-9)
+        assertTrue(rep.validRangeHz!!.first >= 150)
     }
 }

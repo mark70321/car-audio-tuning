@@ -1,4 +1,42 @@
-# 調音技術驗證 App（車用調音 App・階段 0）
+# 車用調音 App｜開發中的測試 App
+
+這個資料夾目前有兩個測試用 App，加上一個共用的核心引擎：
+
+| 資料夾 | 是什麼 | 狀態 |
+|---|---|---|
+| `app/` | 調音技術驗證 App（階段 0）：確認 App 能不能改變其他 App 的聲音 | ✅ 已完成 |
+| `measure/` | 量測引擎驗證 App（階段 1a）：確認手機麥克風量得夠不夠準 | 🔧 測試中 |
+| `core-engine/` | 核心引擎（產生測試音、分析聲音），正式版會沿用 | 🔧 開發中 |
+
+完整的產品規劃寫在 [`PLAN.md`](PLAN.md)。
+
+---
+
+## 量測引擎驗證 App（階段 1a）
+
+### 要確認什麼
+正式版要靠「手機放頭枕當麥克風」量車內聲音。這個 App 確認三件事：
+1. 手機麥克風錄得到可用的聲音曲線（頻率響應）
+2. 同一個位置連測 3 次，曲線差不多（**重複性**）。三條線差很多就代表量不準，後面的自動調音也就不可信
+3. 三種收音方式（UNPROCESSED／VOICE_RECOGNITION／MIC）哪一種最穩
+
+### 怎麼測
+1. 安裝：手機接電腦，雙擊 `install_measure.bat`（或把 `measure\build\outputs\apk\debug\measure-debug.apk` 傳到手機安裝）
+2. 手機藍牙連車機，熄火或怠速、關窗、關冷氣
+3. 手機放駕駛座頭枕旁、耳朵高度，測量時不要動
+4. 車機音量先小聲試一次，再調到平常偏大聲
+5. 選收音來源 → 按「開始連測 3 次」→ 看結果；三種來源各測一輪
+6. 按「分享量測結果」把文字傳給 Claude 分析
+
+### 結果怎麼看
+- **圖**：橫軸左邊低音、右邊高音；三條彩色線越重疊越好
+- **差異**：100Hz～10kHz 最大差 1.5 dB 以內 = 很穩定；3 dB 以內 = 可接受；超過 = 不穩定（暫定標準，實測後可能調整）
+- **訊噪比**：掃頻聲比背景噪音大多少，25 dB 以上比較可靠
+- **延遲**：藍牙傳輸延遲，App 會自動扣掉，只是參考
+
+---
+
+## 調音技術驗證 App（階段 0，已完成）
 
 這是「車用調音 App」正式開發前的**測試用小 App**。
 目的只有一個：確認一個普通的 App，能不能改變車機（或手機）上**其他 App 播出來的聲音**。
@@ -110,4 +148,12 @@ gradlew assembleDebug
 | `app/src/main/java/.../EqController.kt` | 實際調整聲音的部分（建立 EQ、砍低音、恢復） |
 | `app/src/main/res/values/strings.xml` | 畫面上所有中文字 |
 | `install.bat` | 一鍵安裝到接上電腦的手機 |
+| `install_measure.bat` | 一鍵安裝階段 1a 量測 App |
+| `core-engine/.../LogSweep.kt` | 產生由低到高的測試音（對數掃頻） |
+| `core-engine/.../Deconvolver.kt` | 把錄音和測試音相除，算出整體響應（自動扣掉藍牙延遲） |
+| `core-engine/.../FrequencyResponse.kt` | 算出聲音曲線並做 1/3 倍頻程平滑 |
+| `core-engine/.../Measurement.kt` | 音量／噪音檢查、三次重複性比較 |
+| `core-engine/src/test/` | 電腦上就能跑的自動測試：`gradlew :core-engine:test` |
+| `measure/.../SweepCapture.kt` | 手機一邊播測試音、一邊錄音 |
+| `measure/.../MainActivity.kt` | 1a 量測 App 畫面（說明、量測、曲線圖、比較、分享） |
 | `PLAN.md` | 完整產品規劃書 |

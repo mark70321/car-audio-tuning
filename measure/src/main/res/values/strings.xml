@@ -15,7 +15,7 @@
     <string name="source_mic">MIC（一般）</string>
     <string name="source_unsupported">這支手機不支援 UNPROCESSED，按了會失敗</string>
     <string name="btn_start">開始連測 %1$d 次</string>
-    <string name="calibrating">暖機＋自動調整音量中（這幾次不算）…</string>
+    <string name="calibrating">暖機＋自動調整音量中（第一次會把每種收音方式都試一遍，約 1 分鐘，這幾次不算）…</string>
     <string name="cal_too_quiet_max">手機音量已經開到最大還是太小聲（峰值 %1$.0f dBFS）：請把車機／音響本身的音量調大，或手機靠近喇叭一點，再按「重新校準音量」</string>
     <string name="cal_too_loud_min">手機音量已經調到最小還是太大聲（峰值 %1$.0f dBFS）：請把車機／音響本身的音量調小再按一次</string>
     <string name="cal_volume_stuck">這台裝置不讓 App 調整媒體音量，無法自動校準</string>
@@ -34,7 +34,6 @@
     <string name="no_result">這個收音來源還沒量過</string>
     <string name="run_line">第 %1$d 次：延遲 %2$.0f ms、峰值 %3$.1f dBFS、訊噪比 %4$.0f dB</string>
     <string name="warn_clipped">　⚠️ 太大聲（爆音），把音量調小再測</string>
-    <string name="warn_quiet">　⚠️ 太小聲，把音量調大再測</string>
     <string name="warn_noisy">　⚠️ 背景太吵，結果可能不準</string>
     <string name="spread_line">三次曲線形狀差異（100Hz～10kHz）最大 %1$.1f dB</string>
     <string name="offset_line">整體音量偏移 %1$.1f dB（中途調過音量會變大，不影響形狀判斷）</string>

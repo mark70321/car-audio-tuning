@@ -140,8 +140,10 @@ class MeasureSession(private val context: Context) {
     }
 
     /**
-     * 還沒固定音量：從目前音量開始，太小聲就自動調大、太大聲就調小，找到合適的一格後固定。
-     * 已固定：設回那一格，只擋爆音；偏小聲照樣量（結果會標示），確保各收音方式音量一致。
+     * 還沒固定音量：每種收音方式各暖機一次，以「最大聲的那種」為準調音量——
+     * 同一個喇叭音量下各收音方式錄到的大小差很多（2026-10 紅米：語音辨識比原始大 12 dB 以上），
+     * 只看一種會讓別種爆音。找到合適的一格後固定。
+     * 已固定：設回那一格，只擋爆音；比較小聲的收音方式照樣量（看訊噪比），確保喇叭音量一致。
      */
     private suspend fun calibrate(source: MicSource, fs: Int) {
         lockedVolume?.let { locked ->
@@ -150,11 +152,30 @@ class MeasureSession(private val context: Context) {
             if (peak > -1.0) throw IllegalStateException(context.getString(R.string.cal_locked_too_loud, peak))
             return
         }
+        // 這次要量的來源排最後，順便當它正式量測前的暖機
+        val sources = withContext(Dispatchers.IO) {
+            MicSource.entries.filter { s ->
+                s != source && (s != MicSource.UNPROCESSED || supportsUnprocessed(context)) &&
+                    runCatching { SweepCapture.probeSampleRate(s) }.getOrNull() == fs
+            }
+        } + source
         var vol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
         var wentUp = false
         repeat(CAL_MAX_TRIES) {
             if (setVolume(vol) != vol) throw IllegalStateException(context.getString(R.string.cal_volume_stuck))
-            val peak = warmUp(source, fs)
+            var peak = -200.0
+            for (s in sources) {
+                // 別種收音方式暫時錄不了就略過，只有這次要量的那種失敗才算失敗
+                val p = if (s == source) warmUp(s, fs) else try {
+                    warmUp(s, fs)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (p != null) peak = maxOf(peak, p)
+                if (peak > -1.0) break // 已經爆音，不用再試別種
+            }
             when {
                 peak < -15.0 -> {
                     if (vol >= maxVolume) throw IllegalStateException(context.getString(R.string.cal_too_quiet_max, peak))
@@ -374,7 +395,6 @@ private fun ResultCard(session: MeasureSession, source: MicSource) {
             val l = r.levels
             Body(stringResource(R.string.run_line, i + 1, r.latencyMs, l.peakDbfs, l.snrDb), color = RunColors[i % RunColors.size])
             if (l.clipped) Body(stringResource(R.string.warn_clipped))
-            if (l.tooQuiet) Body(stringResource(R.string.warn_quiet))
             if (l.noisy) Body(stringResource(R.string.warn_noisy))
         }
         repeatabilityOf(list)?.let { rep ->

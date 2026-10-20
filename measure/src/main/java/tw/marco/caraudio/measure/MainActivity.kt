@@ -69,6 +69,7 @@ import tw.marco.caraudio.core.LogSweep
 import tw.marco.caraudio.core.MeasurementAnalyzer
 import tw.marco.caraudio.core.MeasurementResult
 import tw.marco.caraudio.core.Repeatability
+import java.io.File
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.log10
@@ -89,7 +90,11 @@ class MainActivity : ComponentActivity() {
 
 const val RUNS = 3
 
-class MeasureSession {
+class MeasureSession(private val context: Context) {
+    private val files = ResultFiles(context.getExternalFilesDir(null))
+    /** 最後一批結果存到哪個資料夾（存檔失敗則為 null） */
+    var savedDir by mutableStateOf<String?>(null)
+
     /** 第一次量測時才決定（要先有麥克風權限才能實際試錄音器） */
     var sampleRate by mutableStateOf<Int?>(null)
     /** 分享文字用：最後一次使用的掃頻設定 */
@@ -111,6 +116,8 @@ class MeasureSession {
         error = null
         results.remove(source)
         val list = mutableListOf<MeasurementResult>()
+        savedDir = null
+        val dir = files.newBatchDir(source)
         try {
             val fs = withContext(Dispatchers.IO) { SweepCapture.probeSampleRate(source) }
                 ?: throw IllegalStateException("this phone cannot record from ${source.name}")
@@ -120,6 +127,7 @@ class MeasureSession {
                 step = i
                 val capture = SweepCapture.run(source, sweep)
                 list += withContext(Dispatchers.Default) {
+                    if (dir != null) runCatching { files.writeWav(File(dir, "run$i.wav"), capture.samples, fs) }
                     MeasurementAnalyzer.analyze(capture.samples, sweep, capture.prerollSamples)
                 }
                 results[source] = list.toList()
@@ -132,6 +140,12 @@ class MeasureSession {
         } finally {
             running = false
             step = 0
+        }
+        // 成功或中途失敗都存一份摘要（含錯誤訊息），方便事後追查
+        if (dir != null) {
+            val text = buildShareText(context, this, only = source) + (error?.let { "\n錯誤：$it" } ?: "")
+            val ok = withContext(Dispatchers.IO) { runCatching { File(dir, "summary.txt").writeText(text) }.isSuccess }
+            if (ok) savedDir = dir.absolutePath
         }
     }
 }
@@ -150,7 +164,7 @@ private val RunColors = listOf(Color(0xFF2E7DD7), Color(0xFFE8833A), Color(0xFF3
 @Composable
 fun App() {
     val context = LocalContext.current
-    val session = remember { MeasureSession() }
+    val session = remember { MeasureSession(context.applicationContext) }
     var source by remember {
         mutableStateOf(if (supportsUnprocessed(context)) MicSource.UNPROCESSED else MicSource.VOICE_RECOGNITION)
     }
@@ -250,6 +264,7 @@ private fun MeasureCard(session: MeasureSession, source: MicSource, onSource: (M
         if (session.running) Body(stringResource(R.string.running, session.step, RUNS), bold = true)
         if (denied) Body(stringResource(R.string.permission_denied), color = MaterialTheme.colorScheme.error)
         session.error?.let { Body(stringResource(R.string.measure_error, it), color = MaterialTheme.colorScheme.error) }
+        session.savedDir?.let { Text(stringResource(R.string.saved_to, it), fontSize = 16.sp) }
         session.sampleRate?.let { Text(stringResource(R.string.sample_rate, it), fontSize = 16.sp) }
     }
 }
@@ -364,13 +379,15 @@ private fun ResponseChart(curves: List<FrequencyResponse>) {
 
 // ---------- 分享文字（給 Claude 分析用，含 1/3 倍頻程數值）----------
 
-private fun buildShareText(context: Context, session: MeasureSession): String {
+/** [only] 不為 null 時只輸出該收音來源（存檔用）。 */
+private fun buildShareText(context: Context, session: MeasureSession, only: MicSource? = null): String {
     fun s(@StringRes id: Int) = context.getString(id)
     val lines = mutableListOf<String>()
     lines += "裝置：${Build.MANUFACTURER} / ${Build.MODEL}（Android ${Build.VERSION.RELEASE}，API ${Build.VERSION.SDK_INT}）"
     session.sweep?.let { lines += "取樣率 ${it.sampleRate} Hz，掃頻 ${it.startHz.toInt()}～${it.endHz.toInt()} Hz / ${it.durationSec} 秒" }
     val centers = FrequencyResponse.thirdOctaveCenters
     for ((source, list) in session.results) {
+        if (only != null && source != only) continue
         lines += ""
         lines += "【${s(source.label)}】"
         list.forEachIndexed { i, r ->

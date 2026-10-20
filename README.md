@@ -26,7 +26,9 @@
 3. 手機放駕駛座頭枕旁、耳朵高度，測量時不要動
 4. 車機音量先小聲試一次，再調到平常偏大聲
 5. 選收音來源 → 按「開始連測 3 次」→ 看結果；三種來源各測一輪
-6. 按「分享量測結果」把文字傳給 Claude 分析
+6. 結果會自動存在手機裡（每次量測一個資料夾：3 段原始錄音 + 摘要文字）。回家把手機接電腦，跟 Claude 說「讀量測結果」即可，不用手動傳
+   - 存放位置：`/sdcard/Android/data/tw.marco.caraudio.measure/files/results/`
+   - 也可以按「分享量測結果」用 LINE／Email 傳給自己再貼給 Claude
 
 ### 結果怎麼看
 - **圖**：橫軸左邊低音、右邊高音；三條彩色線越重疊越好
@@ -154,6 +156,7 @@ gradlew assembleDebug
 | `core-engine/.../FrequencyResponse.kt` | 算出聲音曲線並做 1/3 倍頻程平滑 |
 | `core-engine/.../Measurement.kt` | 音量／噪音檢查、三次重複性比較 |
 | `core-engine/src/test/` | 電腦上就能跑的自動測試：`gradlew :core-engine:test` |
+| `measure/.../ResultFiles.kt` | 把錄音（WAV）和摘要存成檔案 |
 | `measure/.../SweepCapture.kt` | 手機一邊播測試音、一邊錄音 |
 | `measure/.../MainActivity.kt` | 1a 量測 App 畫面（說明、量測、曲線圖、比較、分享） |
 | `PLAN.md` | 完整產品規劃書 |

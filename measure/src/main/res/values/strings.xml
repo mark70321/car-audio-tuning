@@ -18,6 +18,7 @@
     <string name="running">第 %1$d / %2$d 次量測中，請保持安靜…</string>
     <string name="permission_denied">沒有麥克風權限，無法量測。請到系統設定允許麥克風。</string>
     <string name="measure_error">量測失敗：%1$s</string>
+    <string name="saved_to">已存檔（手機接電腦後 Claude 可直接讀取）：%1$s</string>
     <string name="sample_rate">取樣率：%1$d Hz</string>
 
     <!-- 結果 -->

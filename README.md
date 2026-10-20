@@ -81,7 +81,11 @@
 | 日期 | 機器 | 結果 |
 |---|---|---|
 | 2026-10-17 | Note 8（Android 9） | 接藍牙喇叭時兩種方式都有作用；不支援 UNPROCESSED 錄音 |
-| 待測 | 車機 | 本機音樂／CarPlay／藍牙三項尚未測試 |
+| 2026-10 | 車機（alps／MT8163 公版，顯示 Android 13、實際 Android 9） | 車機本機播放 YouTube、藍牙音樂：兩種方式都有作用；連續播 30 分鐘、熄火再發動仍有效；不支援 UNPROCESSED 錄音 |
+| 待測 | 車機 | CarPlay（需借 iPhone）、完全斷電後冷開機 |
+| 待測 | 新版 Android 手機（13 以上） | 全域 EQ 與收音 |
+
+> 結論：階段 0 完成，走「全自動閉環」路線，以 DynamicsProcessing 為主（舊 Equalizer 砍低音會讓聲音變單薄）。詳見 `PLAN.md` 第 11 節。
 
 ---
 

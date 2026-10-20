@@ -6,3 +6,16 @@ local.properties
 .kotlin/
 *.apk
 measurements/
+
+# 金鑰與機密：絕對不能進公開倉庫
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+*service-account*.json
+play-*.json
+google-services.json
+*.pem
+*.p12
+.env
+secrets/

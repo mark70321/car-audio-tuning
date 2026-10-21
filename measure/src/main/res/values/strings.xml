@@ -4,7 +4,8 @@
 
     <!-- 說明 -->
     <string name="section_howto">怎麼測</string>
-    <string name="howto_steps">1. 手機用藍牙連上車機，車機切到藍牙音樂\n2. 熄火或怠速、關窗、關冷氣\n3. 手機放駕駛座頭枕旁、耳朵高度，麥克風（手機底部）朝前，測量時不要動它\n4. 車機音量先調到平常聽音樂的大小\n5. 按「開始連測 3 次」，App 會先播幾次短的聲音，自動把手機媒體音量調到合適的大小並固定下來（音量只照主要收音方式來調；別種收音方式如果太大聲，App 會自動再調小一點，中途不要自己調音量），接著聽到 3 次「嗚——」由低到高的聲音，每次約 9 秒，期間保持安靜</string>
+    <string name="howto_steps">1. 手機用藍牙連上車機，車機切到藍牙音樂\n2. 熄火或怠速、關窗、關冷氣\n3. 手機放駕駛座頭枕旁、耳朵高度，麥克風（手機底部）朝前，測量時不要動它\n4. 車機音量先調到平常聽音樂的大小\n5. 勾選「倒數 15 秒」的話，按下開始後請下車關門，測完車機會「嗶嗶嗶」叫你回來（測試音很刺耳，人不用待在車上聽）
+6. 按「開始」，App 會先播幾次短的聲音，自動把手機媒體音量調到合適的大小並固定下來（音量只照主要收音方式來調；別種收音方式如果太大聲，App 會自動再調小一點，中途不要自己調音量），接著播選定次數的「嗚——」由低到高的聲音，每次約 9 秒，期間保持安靜。平常量 1 次就夠，要看重複性才選 2～3 次</string>
     <string name="howto_volume_warning">⚠️ 第一次先用小音量試一次，聲音太大會傷耳朵。</string>
 
     <!-- 量測 -->
@@ -14,7 +15,11 @@
     <string name="source_voice_recognition">VOICE_RECOGNITION（語音辨識）</string>
     <string name="source_mic">MIC（一般）</string>
     <string name="source_unsupported">這支手機不支援 UNPROCESSED，按了會失敗</string>
-    <string name="btn_start">開始連測 %1$d 次</string>
+    <string name="btn_start">開始量測（%1$d 次）</string>
+    <string name="choose_runs">連測次數：</string>
+    <string name="runs_option">%1$d 次</string>
+    <string name="leave_car">開始前倒數 15 秒讓我下車，測完嗶嗶叫我</string>
+    <string name="countdown">%1$d 秒後開始，請下車並關上車門…</string>
     <string name="calibrating">暖機＋自動調整音量中（這幾次不算）…</string>
     <string name="cal_too_quiet_max">手機音量已經開到最大還是太小聲（峰值 %1$.0f dBFS）：請把車機／音響本身的音量調大，或手機靠近喇叭一點，再按「重新校準音量」</string>
     <string name="cal_too_loud_min">手機音量已經調到最小還是太大聲（峰值 %1$.0f dBFS）：請把車機／音響本身的音量調小再按一次</string>
@@ -46,6 +51,7 @@
     <!-- 比較 -->
     <string name="section_compare">收音來源比較</string>
     <string name="compare_line">%1$s：差異 %2$.1f dB（%3$s），平均訊噪比 %4$.0f dB</string>
+    <string name="compare_line_single">%1$s：只量 1 次（沒有重複性），訊噪比 %2$.0f dB</string>
     <string name="compare_empty">每種來源都量過一輪後，這裡會列出比較</string>
 
     <string name="btn_share">分享量測結果（傳給自己或 Claude）</string>

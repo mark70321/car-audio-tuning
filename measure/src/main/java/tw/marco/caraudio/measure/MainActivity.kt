@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,6 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -45,12 +48,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -89,7 +94,10 @@ class MainActivity : ComponentActivity() {
 
 // ---------- 量測流程（結果只放記憶體，關掉 App 就清空）----------
 
-const val RUNS = 3
+/** 連測次數選項：正式量測 1 次就夠，驗證重複性時才用 2～3 次（測試音很刺耳，能少就少） */
+val RUN_OPTIONS = listOf(1, 2, 3)
+/** 開始前倒數幾秒，讓使用者下車關門 */
+private const val COUNTDOWN_SEC = 15
 /** 自動校準時峰值超過這個就調小一格 */
 private const val CAL_HOT_DBFS = -4.0
 private const val CAL_MAX_TRIES = 10
@@ -116,6 +124,11 @@ class MeasureSession(private val context: Context) {
 
     var running by mutableStateOf(false)
     var step by mutableIntStateOf(0)
+    var runs by mutableIntStateOf(1)
+    /** 開始前倒數，讓人先下車（人在車內聽測試音很難受），測完嗶嗶叫人回來 */
+    var leaveCar by mutableStateOf(true)
+    /** 倒數剩幾秒，0 = 沒在倒數 */
+    var countdown by mutableIntStateOf(0)
     var error by mutableStateOf<String?>(null)
     val results = mutableStateMapOf<MicSource, List<MeasurementResult>>()
 
@@ -197,6 +210,19 @@ class MeasureSession(private val context: Context) {
         throw IllegalStateException(context.getString(R.string.cal_failed))
     }
 
+    /** 測完嗶三聲（走媒體音量，會從車機喇叭出來），叫下車的人回來；失敗時改成低沉的錯誤音 */
+    private suspend fun doneBeep(ok: Boolean) {
+        val tone = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 80) }.getOrNull() ?: return
+        try {
+            repeat(3) {
+                tone.startTone(if (ok) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_NACK, 200)
+                delay(400)
+            }
+        } finally {
+            tone.release()
+        }
+    }
+
     private suspend fun runBatch(source: MicSource) {
         error = null
         results.remove(source)
@@ -210,9 +236,17 @@ class MeasureSession(private val context: Context) {
             sampleRate = fs
             val sweep = LogSweep(fs, durationSec = 6.0).also { this.sweep = it }
             step = 0
+            if (leaveCar) {
+                for (sec in COUNTDOWN_SEC downTo 1) {
+                    countdown = sec
+                    delay(1000)
+                }
+                countdown = 0
+            }
             calibrate(source, fs)
             delay(1000)
-            for (i in 1..RUNS) {
+            val runs = runs
+            for (i in 1..runs) {
                 step = i
                 val capture = SweepCapture.run(source, sweep)
                 list += withContext(Dispatchers.Default) {
@@ -220,15 +254,18 @@ class MeasureSession(private val context: Context) {
                     MeasurementAnalyzer.analyze(capture.samples, sweep, capture.prerollSamples)
                 }
                 results[source] = list.toList()
-                if (i < RUNS) delay(1500) // 讓車廂殘響散掉
+                if (i < runs) delay(1500) // 讓車廂殘響散掉
             }
+            if (leaveCar) doneBeep(ok = true)
         } catch (e: CancellationException) {
             throw e // 離開畫面：正常取消，不當成錯誤
         } catch (e: Exception) {
             error = e.message ?: e.javaClass.simpleName
+            if (leaveCar) doneBeep(ok = false)
         } finally {
             running = false
             step = 0
+            countdown = 0
         }
         // 成功或中途失敗都存一份摘要（含錯誤訊息），方便事後追查
         if (dir != null) {
@@ -320,6 +357,12 @@ private fun MeasureCard(session: MeasureSession, source: MicSource, onSource: (M
     val scope = rememberCoroutineScope()
     val unprocessed = remember { supportsUnprocessed(context) }
     var denied by remember { mutableStateOf(false) }
+    // 倒數＋量測期間人可能在車外，不能讓螢幕關掉
+    val view = LocalView.current
+    DisposableEffect(session.running) {
+        view.keepScreenOn = session.running
+        onDispose { view.keepScreenOn = false }
+    }
     val start = { session.start(scope, source) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         denied = !granted
@@ -340,6 +383,22 @@ private fun MeasureCard(session: MeasureSession, source: MicSource, onSource: (M
         }
         if (source == MicSource.UNPROCESSED && !unprocessed) Body(stringResource(R.string.source_unsupported))
 
+        Body(stringResource(R.string.choose_runs), bold = true)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            for (n in RUN_OPTIONS) {
+                FilterChip(
+                    selected = session.runs == n,
+                    onClick = { session.runs = n },
+                    enabled = !session.running,
+                    label = { Text(stringResource(R.string.runs_option, n), fontSize = 20.sp, modifier = Modifier.padding(8.dp)) },
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = session.leaveCar, onCheckedChange = { session.leaveCar = it }, enabled = !session.running)
+            Body(stringResource(R.string.leave_car))
+        }
+
         Button(
             onClick = {
                 val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -348,12 +407,15 @@ private fun MeasureCard(session: MeasureSession, source: MicSource, onSource: (M
             },
             enabled = !session.running,
             modifier = Modifier.fillMaxWidth().height(110.dp),
-        ) { Text(stringResource(R.string.btn_start, RUNS), fontSize = 34.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.btn_start, session.runs), fontSize = 34.sp, fontWeight = FontWeight.Bold) }
 
         if (session.running) {
             Body(
-                if (session.step == 0) stringResource(R.string.calibrating)
-                else stringResource(R.string.running, session.step, RUNS),
+                when {
+                    session.countdown > 0 -> stringResource(R.string.countdown, session.countdown)
+                    session.step == 0 -> stringResource(R.string.calibrating)
+                    else -> stringResource(R.string.running, session.step, session.runs)
+                },
                 bold = true,
             )
         }
@@ -409,11 +471,16 @@ private fun ResultCard(session: MeasureSession, source: MicSource) {
 private fun CompareCard(session: MeasureSession) {
     val context = LocalContext.current
     Section(stringResource(R.string.section_compare)) {
-        val rows = MicSource.entries.mapNotNull { s -> repeatabilityOf(session.results[s])?.let { s to it } }
+        val rows = MicSource.entries.mapNotNull { s -> session.results[s]?.takeIf { it.isNotEmpty() }?.let { s to it } }
         if (rows.isEmpty()) Body(stringResource(R.string.compare_empty))
-        for ((s, rep) in rows) {
-            val snr = session.results[s]!!.map { it.levels.snrDb }.average()
-            Body(stringResource(R.string.compare_line, stringResource(s.label), rep.midSpreadDb, verdictText(rep.verdict), snr))
+        for ((s, list) in rows) {
+            val snr = list.map { it.levels.snrDb }.average()
+            val rep = repeatabilityOf(list)
+            if (rep != null) {
+                Body(stringResource(R.string.compare_line, stringResource(s.label), rep.midSpreadDb, verdictText(rep.verdict), snr))
+            } else {
+                Body(stringResource(R.string.compare_line_single, stringResource(s.label), snr))
+            }
         }
 
         val shareTitle = stringResource(R.string.share_title)

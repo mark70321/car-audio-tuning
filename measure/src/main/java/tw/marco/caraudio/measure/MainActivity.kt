@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
 // ---------- 量測流程（結果只放記憶體，關掉 App 就清空）----------
 
 const val RUNS = 3
-/** 自動校準時峰值超過這個就調小一格：留餘裕給比較大聲的收音方式（紅米實測語音辨識比原始大約 10 dB） */
+/** 自動校準時峰值超過這個就調小一格 */
 private const val CAL_HOT_DBFS = -4.0
 private const val CAL_MAX_TRIES = 10
 
@@ -111,6 +111,8 @@ class MeasureSession(private val context: Context) {
      * 藍牙音響的音量鈕通常直接連動手機媒體音量，所以由 App 統一設定。
      */
     var lockedVolume by mutableStateOf<Int?>(null)
+    /** 每種收音方式最後一批實際用的音量（比固定值大聲會爆音的收音方式會往下調） */
+    val batchVolumes = mutableStateMapOf<MicSource, Int>()
 
     var running by mutableStateOf(false)
     var step by mutableIntStateOf(0)
@@ -140,42 +142,37 @@ class MeasureSession(private val context: Context) {
     }
 
     /**
-     * 還沒固定音量：每種收音方式各暖機一次，以「最大聲的那種」為準調音量——
-     * 同一個喇叭音量下各收音方式錄到的大小差很多（2026-10 紅米：語音辨識比原始大 12 dB 以上），
-     * 只看一種會讓別種爆音。找到合適的一格後固定。
-     * 已固定：設回那一格，只擋爆音；比較小聲的收音方式照樣量（看訊噪比），確保喇叭音量一致。
+     * 音量只照主要收音方式校準（2026-10-21 車上實測：以最大聲的語音辨識為準時，紅米原始收音峰值只有 -34 dBFS、
+     * 訊噪比 15 dB；只照原始校準可多約 20 dB）。
+     * 還沒固定音量：用主要收音方式找合適的一格並固定。
+     * 之後每批：設回固定那一格；這次的收音方式若會爆音，只往下調（這批用比較小的音量，記在 [batchVolumes]），固定值不變。
      */
     private suspend fun calibrate(source: MicSource, fs: Int) {
-        lockedVolume?.let { locked ->
-            if (setVolume(locked) != locked) throw IllegalStateException(context.getString(R.string.cal_volume_stuck))
-            val peak = warmUp(source, fs)
-            if (peak > -1.0) throw IllegalStateException(context.getString(R.string.cal_locked_too_loud, peak))
-            return
+        val ref = primarySource(context).takeIf { p ->
+            p == source || withContext(Dispatchers.IO) { runCatching { SweepCapture.probeSampleRate(p) }.getOrNull() } == fs
+        } ?: source
+        val refPeak = if (lockedVolume == null) lockVolume(ref, fs) else null
+        var vol = lockedVolume!!
+        if (setVolume(vol) != vol) throw IllegalStateException(context.getString(R.string.cal_volume_stuck))
+        // 剛用同一種收音方式校準完就不用再暖機一次
+        var peak = if (ref == source && refPeak != null) refPeak else warmUp(source, fs)
+        while (peak > -1.0) {
+            if (vol <= 1) throw IllegalStateException(context.getString(R.string.cal_too_loud_min, peak))
+            vol -= 1
+            if (setVolume(vol) != vol) throw IllegalStateException(context.getString(R.string.cal_volume_stuck))
+            delay(500)
+            peak = warmUp(source, fs)
         }
-        // 這次要量的來源排最後，順便當它正式量測前的暖機
-        val sources = withContext(Dispatchers.IO) {
-            MicSource.entries.filter { s ->
-                s != source && (s != MicSource.UNPROCESSED || supportsUnprocessed(context)) &&
-                    runCatching { SweepCapture.probeSampleRate(s) }.getOrNull() == fs
-            }
-        } + source
+        batchVolumes[source] = vol
+    }
+
+    /** 用 [ref] 收音方式找合適的媒體音量並固定到 [lockedVolume]，回傳最後一次暖機的峰值。 */
+    private suspend fun lockVolume(ref: MicSource, fs: Int): Double {
         var vol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
         var wentUp = false
         repeat(CAL_MAX_TRIES) {
             if (setVolume(vol) != vol) throw IllegalStateException(context.getString(R.string.cal_volume_stuck))
-            var peak = -200.0
-            for (s in sources) {
-                // 別種收音方式暫時錄不了就略過，只有這次要量的那種失敗才算失敗
-                val p = if (s == source) warmUp(s, fs) else try {
-                    warmUp(s, fs)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    null
-                }
-                if (p != null) peak = maxOf(peak, p)
-                if (peak > -1.0) break // 已經爆音，不用再試別種
-            }
+            val peak = warmUp(ref, fs)
             when {
                 peak < -15.0 -> {
                     if (vol >= maxVolume) throw IllegalStateException(context.getString(R.string.cal_too_quiet_max, peak))
@@ -186,13 +183,13 @@ class MeasureSession(private val context: Context) {
                     if (vol <= 1) {
                         if (peak > -1.0) throw IllegalStateException(context.getString(R.string.cal_too_loud_min, peak))
                         lockedVolume = vol // 偏大聲但沒爆音，已經不能再小了就接受
-                        return
+                        return peak
                     }
                     vol -= 1
                 }
                 else -> {
                     lockedVolume = vol
-                    return
+                    return peak
                 }
             }
             delay(500)
@@ -203,6 +200,7 @@ class MeasureSession(private val context: Context) {
     private suspend fun runBatch(source: MicSource) {
         error = null
         results.remove(source)
+        batchVolumes.remove(source)
         val list = mutableListOf<MeasurementResult>()
         savedDir = null
         val dir = files.newBatchDir(source)
@@ -257,7 +255,7 @@ fun App() {
     val context = LocalContext.current
     val session = remember { MeasureSession(context.applicationContext) }
     var source by remember {
-        mutableStateOf(if (supportsUnprocessed(context)) MicSource.UNPROCESSED else MicSource.VOICE_RECOGNITION)
+        mutableStateOf(primarySource(context))
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -363,8 +361,9 @@ private fun MeasureCard(session: MeasureSession, source: MicSource, onSource: (M
         session.error?.let { Body(stringResource(R.string.measure_error, it), color = MaterialTheme.colorScheme.error) }
         session.savedDir?.let { Text(stringResource(R.string.saved_to, it), fontSize = 16.sp) }
         session.lockedVolume?.let { v ->
-            Body(stringResource(R.string.volume_locked, v, session.maxVolume))
-            OutlinedButton(onClick = { session.lockedVolume = null }, enabled = !session.running) {
+            Body(stringResource(R.string.volume_locked, v, session.maxVolume, stringResource(primarySource(context).label)))
+            session.batchVolumes[source]?.takeIf { it != v }?.let { Body(stringResource(R.string.volume_lowered, it)) }
+            OutlinedButton(onClick = { session.lockedVolume = null; session.batchVolumes.clear() }, enabled = !session.running) {
                 Text(stringResource(R.string.btn_recalibrate), fontSize = 20.sp)
             }
         }
@@ -488,13 +487,14 @@ private fun buildShareText(context: Context, session: MeasureSession, only: MicS
     fun s(@StringRes id: Int) = context.getString(id)
     val lines = mutableListOf<String>()
     lines += "裝置：${Build.MANUFACTURER} / ${Build.MODEL}（Android ${Build.VERSION.RELEASE}，API ${Build.VERSION.SDK_INT}）"
-    session.lockedVolume?.let { lines += "量測音量：媒體音量第 $it 格／共 ${session.maxVolume} 格" }
+    session.lockedVolume?.let { lines += "固定音量（照${s(primarySource(context).label)}校準）：媒體音量第 $it 格／共 ${session.maxVolume} 格" }
     session.sweep?.let { lines += "取樣率 ${it.sampleRate} Hz，掃頻 ${it.startHz.toInt()}～${it.endHz.toInt()} Hz / ${it.durationSec} 秒" }
     val centers = FrequencyResponse.thirdOctaveCenters
     for ((source, list) in session.results) {
         if (only != null && source != only) continue
         lines += ""
         lines += "【${s(source.label)}】"
+        session.batchVolumes[source]?.let { lines += "量測音量：媒體音量第 $it 格／共 ${session.maxVolume} 格" }
         list.forEachIndexed { i, r ->
             val l = r.levels
             lines += "第${i + 1}次：延遲 %.0f ms、峰值 %.1f dBFS、噪音 %.1f dBFS、訊噪比 %.0f dB".format(

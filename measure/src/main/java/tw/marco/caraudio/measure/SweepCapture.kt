@@ -31,6 +31,13 @@ fun supportsUnprocessed(context: Context): Boolean = runCatching {
         ?.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
 }.getOrDefault(false)
 
+/**
+ * 主要收音方式：支援原始就用原始（2026-10 紅米實測：低頻完整、高頻與語音辨識一致），否則語音辨識。
+ * 音量只照它校準。
+ */
+fun primarySource(context: Context): MicSource =
+    if (supportsUnprocessed(context)) MicSource.UNPROCESSED else MicSource.VOICE_RECOGNITION
+
 /** 一次錄音的原始資料：前 [prerollSamples] 個樣本是播放前的背景噪音。 */
 class Capture(val samples: DoubleArray, val sampleRate: Int, val prerollSamples: Int)
 

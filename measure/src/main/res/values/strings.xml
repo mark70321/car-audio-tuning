@@ -4,7 +4,7 @@
 
     <!-- 說明 -->
     <string name="section_howto">怎麼測</string>
-    <string name="howto_steps">1. 手機用藍牙連上車機，車機切到藍牙音樂\n2. 熄火或怠速、關窗、關冷氣\n3. 手機放駕駛座頭枕旁、耳朵高度，麥克風（手機底部）朝前，測量時不要動它\n4. 車機音量先調到平常聽音樂的大小\n5. 按「開始連測 3 次」，App 會先播幾次短的聲音，自動把手機媒體音量調到合適的大小並固定下來（之後每種收音方式都用同一個音量，中途不要自己調音量），接著聽到 3 次「嗚——」由低到高的聲音，每次約 9 秒，期間保持安靜</string>
+    <string name="howto_steps">1. 手機用藍牙連上車機，車機切到藍牙音樂\n2. 熄火或怠速、關窗、關冷氣\n3. 手機放駕駛座頭枕旁、耳朵高度，麥克風（手機底部）朝前，測量時不要動它\n4. 車機音量先調到平常聽音樂的大小\n5. 按「開始連測 3 次」，App 會先播幾次短的聲音，自動把手機媒體音量調到合適的大小並固定下來（音量只照主要收音方式來調；別種收音方式如果太大聲，App 會自動再調小一點，中途不要自己調音量），接著聽到 3 次「嗚——」由低到高的聲音，每次約 9 秒，期間保持安靜</string>
     <string name="howto_volume_warning">⚠️ 第一次先用小音量試一次，聲音太大會傷耳朵。</string>
 
     <!-- 量測 -->
@@ -15,13 +15,13 @@
     <string name="source_mic">MIC（一般）</string>
     <string name="source_unsupported">這支手機不支援 UNPROCESSED，按了會失敗</string>
     <string name="btn_start">開始連測 %1$d 次</string>
-    <string name="calibrating">暖機＋自動調整音量中（第一次會把每種收音方式都試一遍，約 1 分鐘，這幾次不算）…</string>
+    <string name="calibrating">暖機＋自動調整音量中（這幾次不算）…</string>
     <string name="cal_too_quiet_max">手機音量已經開到最大還是太小聲（峰值 %1$.0f dBFS）：請把車機／音響本身的音量調大，或手機靠近喇叭一點，再按「重新校準音量」</string>
     <string name="cal_too_loud_min">手機音量已經調到最小還是太大聲（峰值 %1$.0f dBFS）：請把車機／音響本身的音量調小再按一次</string>
     <string name="cal_volume_stuck">這台裝置不讓 App 調整媒體音量，無法自動校準</string>
     <string name="cal_failed">音量一直調不好，請再按一次</string>
-    <string name="cal_locked_too_loud">這個收音方式在固定音量下會爆音（峰值 %1$.0f dBFS）：請按「重新校準音量」，然後每種收音方式都重測一次</string>
-    <string name="volume_locked">量測音量已固定：媒體音量第 %1$d 格／共 %2$d 格（每種收音方式都用這個音量）</string>
+    <string name="volume_locked">量測音量已固定：媒體音量第 %1$d 格／共 %2$d 格（照 %3$s 校準）</string>
+    <string name="volume_lowered">這個收音方式比較大聲，這批自動調小到第 %1$d 格</string>
     <string name="btn_recalibrate">重新校準音量</string>
     <string name="running">第 %1$d / %2$d 次量測中，請保持安靜…</string>
     <string name="permission_denied">沒有麥克風權限，無法量測。請到系統設定允許麥克風。</string>

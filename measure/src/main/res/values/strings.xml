@@ -57,4 +57,6 @@
     <string name="btn_share">分享量測結果（傳給自己或 Claude）</string>
     <string name="share_title">分享量測結果</string>
     <string name="btn_clear">清除全部結果</string>
+    <string name="remote_busy">電腦遙控沒執行：上一批還在量</string>
+    <string name="remote_no_permission">電腦遙控失敗：還沒有麥克風權限（電腦要先執行 adb shell pm grant 給權限）</string>
 </resources>

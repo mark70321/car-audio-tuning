@@ -41,6 +41,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -81,13 +82,49 @@ import kotlin.math.floor
 import kotlin.math.log10
 
 class MainActivity : ComponentActivity() {
+    /** 電腦用 adb 送來、還沒處理的遙控指令 */
+    private val remote = mutableStateOf<RemoteCommand?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 畫面重建時不要把同一個指令再跑一次
+        if (savedInstanceState == null) remote.value = RemoteCommand.from(intent)
+        setIntent(Intent()) // 處理過就清掉，之後從最近使用的 App 打開不會又自動播測試音
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                Surface(Modifier.fillMaxSize()) { App() }
+                Surface(Modifier.fillMaxSize()) { App(remote.value) { remote.value = null } }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        RemoteCommand.from(intent)?.let { remote.value = it }
+    }
+}
+
+/**
+ * 電腦遙控量測（使用者在車上不用碰手機）：
+ * adb shell am start -n tw.marco.caraudio.measure/.MainActivity -a tw.marco.caraudio.measure.REMOTE_MEASURE
+ *   --es source UNPROCESSED --ei runs 1 --ez leaveCar true --ez recalibrate false
+ * 每個參數都可省略（省略＝照畫面目前的設定）。結果照常存檔，電腦看 summary.txt 出現就代表這批結束；
+ * 指令沒被執行時改寫 files/remote_rejected.txt（原因），電腦不用白等。
+ */
+data class RemoteCommand(val source: MicSource?, val runs: Int?, val leaveCar: Boolean?, val recalibrate: Boolean) {
+    companion object {
+        const val ACTION = "tw.marco.caraudio.measure.REMOTE_MEASURE"
+
+        fun from(intent: Intent?): RemoteCommand? {
+            if (intent?.action != ACTION) return null
+            // 從「最近使用的 App」重新打開時，系統會把當初的指令再送一次，不能當成新指令
+            if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+            return RemoteCommand(
+                source = intent.getStringExtra("source")?.let { n -> MicSource.entries.firstOrNull { it.name == n } },
+                runs = intent.getIntExtra("runs", 0).takeIf { it in RUN_OPTIONS },
+                leaveCar = if (intent.hasExtra("leaveCar")) intent.getBooleanExtra("leaveCar", true) else null,
+                recalibrate = intent.getBooleanExtra("recalibrate", false),
+            )
         }
     }
 }
@@ -288,11 +325,33 @@ private val BodySize = 22.sp
 private val RunColors = listOf(Color(0xFF2E7DD7), Color(0xFFE8833A), Color(0xFF3BA55C))
 
 @Composable
-fun App() {
+fun App(remote: RemoteCommand?, onRemoteHandled: () -> Unit) {
     val context = LocalContext.current
     val session = remember { MeasureSession(context.applicationContext) }
     var source by remember {
         mutableStateOf(primarySource(context))
+    }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(remote) {
+        val cmd = remote ?: return@LaunchedEffect
+        onRemoteHandled()
+        val rejected = File(context.getExternalFilesDir(null), "remote_rejected.txt")
+        runCatching { rejected.delete() }
+        fun reject(reason: String) {
+            session.error = reason
+            runCatching { rejected.writeText(reason) }
+        }
+        if (session.running) return@LaunchedEffect reject(context.getString(R.string.remote_busy))
+        cmd.source?.let { source = it }
+        cmd.runs?.let { session.runs = it }
+        cmd.leaveCar?.let { session.leaveCar = it }
+        if (cmd.recalibrate) { session.lockedVolume = null; session.batchVolumes.clear() }
+        // 遙控沒辦法按權限視窗：先用 adb shell pm grant 給麥克風權限
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            session.start(scope, source)
+        } else {
+            reject(context.getString(R.string.remote_no_permission))
+        }
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
